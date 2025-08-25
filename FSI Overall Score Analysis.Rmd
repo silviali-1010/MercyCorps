@@ -1,0 +1,328 @@
+---
+title: "FSI Crisis Year (Year 0) Regressions Results"
+author: "Silvia Li"
+date: "2025-02-17"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "/Users/lixiaoya/Desktop/Mercy Corps Policy Lab/Data")
+
+```
+
+```{r}
+setwd("/Users/lixiaoya/Desktop/Mercy Corps Policy Lab/Data")
+library(tidyverse)
+library(readxl)
+library(dplyr)
+ocha <- read.csv("GHO 2025 Development Needs - Weighted averages.csv")
+```
+
+
+```{r}
+## making pin numeric
+ocha <- ocha %>%
+  mutate(new_pin = str_replace_all(people_in_need, ",", "")) %>%
+  mutate(numeric_pin = as.numeric(new_pin))
+
+## filtering to columns we need
+ocha <- ocha[c("country", "calendar_year", "year_of_crisis",
+                        "numeric_pin", "years_since_crisis")]
+
+ocha <- ocha %>%
+  mutate(country_year = paste0(country, calendar_year))
+```
+```{r}
+## adding in UN population data
+library(readxl)
+un_pop <- read_excel("/Users/lixiaoya/Desktop/Mercy Corps Policy Lab/Data/Total Population.xlsx")
+
+```
+
+```{r}
+## concat year and country in ocha
+ocha <- ocha %>%
+  mutate(country_year = paste0(country, calendar_year))
+```
+
+```{r}
+## concat year and country in UN pop
+un_pop <- un_pop %>%
+  mutate(country_year = paste0(Country, Time))
+
+## making population as numeric
+un_pop <- un_pop %>%
+  mutate(total_country_population = as.numeric(Value))
+```
+
+```{r}
+## merging columns to get population for each country in each year
+merged_ocha_un <- merge(un_pop, ocha, by="country_year")
+```
+
+```{r}
+## filtering so I only have columns I need
+merged_ocha_un <- merged_ocha_un[c("country_year", "Country", 
+                                   "total_country_population", "calendar_year", 
+                                   "numeric_pin", "years_since_crisis", 
+                                   "year_of_crisis")]
+
+# Convert 'numeric_pin' to numeric if it's not
+merged_ocha_un$numeric_pin <- as.numeric(as.character(merged_ocha_un$numeric_pin))
+
+# Check and convert 'total_country_population' to numeric if necessary
+merged_ocha_un$total_country_population <- as.numeric(as.character(merged_ocha_un$total_country_population))
+
+# After ensuring both are numeric, perform the operation
+merged_ocha_un <- merged_ocha_un %>%
+  mutate(pin_proportion_of_country = numeric_pin / total_country_population)
+
+```
+
+```{r}
+## adding in FSI
+fsi <- read_excel("XL_FSI_data_nonlag.xlsx")
+
+```
+
+```{r}
+# Transforming the data from wide to long format
+fsi <- fsi %>%
+  pivot_longer(
+    cols = matches("_Total$"), 
+    names_to = "year", 
+    values_to = "total"
+  ) %>%
+  mutate(year = gsub("_Total", "", year))  # Removing the '_Total' suffix from the year column
+```
+
+```{r}
+fsi <- fsi %>%
+  mutate(country_year = paste0(Country, year))
+```
+
+```{r}
+## filtering again so I don't have two country columns when I combine
+fsi <- fsi[c("country_year", "year", "total")]
+
+#merge fsi and ocha data
+complete_data <- merge(merged_ocha_un, fsi, by="country_year")
+
+## filtering to clean it up a bit 
+complete_data <- complete_data[c("country_year", "Country", 
+                                 "total_country_population", "calendar_year", 
+                                 "numeric_pin", "pin_proportion_of_country", 
+                                 "total", "years_since_crisis", 
+                                 "year_of_crisis")]
+```
+
+```{r}
+# add fsi data from 2006
+fsi_more <- read_excel("XL_FSI_data_nonlag.xlsx")
+
+#make it from wide to long
+fsi_more <- fsi_more %>% mutate(across(is.logical, ~as.character(.x))) %>% 
+  tidyr::pivot_longer(!c(Country,), names_to = "year", 
+                      values_to = c("total"))
+```
+
+```{r}
+## renaming year to calendar year 
+
+fsi_more$year <- recode(fsi_more$year,
+                        "2006_Total" = 2006, "2007_Total" = 2007, "2008_Total" = 2008, "2009_Total" = 2009,
+                        "2010_Total" = 2010, "2011_Total" = 2011, "2012_Total" = 2012, "2013_Total" = 2013,
+                        "2014_Total" = 2014, "2015_Total" = 2015, "2016_Total" = 2016, "2017_Total" = 2017,
+                        "2018_Total" = 2018, "2019_Total" = 2019, "2020_Total" = 2020, "2021_Total" = 2021,
+                        "2022_Total" = 2022, "2023_Total" = 2023)
+
+```
+```{r}
+fsi_more$calendar_year <- fsi_more$year
+
+## filtering for columns I need
+fsi_more <- fsi_more[c("Country", "calendar_year", "total")]
+```
+
+```{r}
+## adding years before 2011, getting blanks for all values except score, year, country
+complete_data <- dplyr::bind_rows(complete_data, fsi_more)
+```
+
+
+```{r}
+## making a new column for lag index scores - 0 year lag
+complete_data <- complete_data %>%
+  group_by(Country) %>%
+  mutate(fsi_calendar_year_before_0_years = total[match(calendar_year - 0, 
+                                             calendar_year)]) %>% 
+  ungroup
+
+
+```
+
+```{r}
+## making a new column for lag index scores - 1 year lag
+complete_data <- complete_data %>%
+  group_by(Country) %>%
+  mutate(fsi_calendar_year_before_1_year = total[match(calendar_year - 1, 
+                                             calendar_year)]) %>% 
+  ungroup
+
+```
+
+```{r}
+## making a new column for lag index scores - 2 year lag
+complete_data <- complete_data %>%
+  group_by(Country) %>%
+  mutate(fsi_calendar_year_before_2_year = total[match(calendar_year - 2, 
+                                             calendar_year)]) %>% 
+  ungroup
+
+```
+
+```{r}
+## making a new column for lag index scores - 3 year lag
+complete_data <- complete_data %>%
+  group_by(Country) %>%
+  mutate(fsi_calendar_year_before_3_year = total[match(calendar_year - 3, 
+                                             calendar_year)]) %>% 
+  ungroup
+
+```
+
+```{r}
+## making a new column for lag index scores - 5 year lag
+complete_data <- complete_data %>%
+  group_by(Country) %>%
+  mutate(fsi_calendar_year_before_5_year = total[match(calendar_year - 5, 
+                                             calendar_year)]) %>% 
+  ungroup
+
+```
+
+```{r}
+## taking only the fully filled out rows I need
+clean_data <- complete_data[c(1:253), ]
+```
+
+```{r}
+## Regression for 0 year lag for year of crisis
+lag_0 <- lm(clean_data$pin_proportion_of_country[clean_data$years_since_crisis == 0] 
+            ~ clean_data$fsi_calendar_year_before_0_years[clean_data$years_since_crisis == 0])
+summary(lag_0)
+
+nobs(lag_0)
+```
+
+```{r}
+## Regression for 1 year lag for year of crisis
+lag_1 <- lm(clean_data$pin_proportion_of_country[clean_data$years_since_crisis == 0] 
+            ~ clean_data$fsi_calendar_year_before_1_year[clean_data$years_since_crisis == 0])
+summary(lag_1)
+nobs(lag_1)
+```
+
+```{r}
+## Regression for 2 year lag for year of crisis
+lag_2 <- lm(clean_data$pin_proportion_of_country[clean_data$years_since_crisis == 0] 
+            ~ clean_data$fsi_calendar_year_before_2_year[clean_data$years_since_crisis == 0])
+summary(lag_2)
+nobs(lag_2)
+```
+
+```{r}
+## Regression for 3 year lag for year of crisis
+lag_3 <- lm(clean_data$pin_proportion_of_country[clean_data$years_since_crisis == 0] 
+            ~ clean_data$fsi_calendar_year_before_3_year[clean_data$years_since_crisis == 0])
+summary(lag_3)
+nobs(lag_3)
+```
+
+```{r}
+## Regression for 5 year lag for year of crisis
+lag_5 <- lm(clean_data$pin_proportion_of_country[clean_data$years_since_crisis == 0] 
+            ~ clean_data$fsi_calendar_year_before_5_year[clean_data$years_since_crisis == 0])
+summary(lag_5)
+nobs(lag_5)
+
+```
+```{r}
+## run panel regressions with fixed effect
+## Regression for 0 year lag for year of crisis with the fixed effect
+fe_model_0_lag <- feols(pin_proportion_of_country ~ fsi_calendar_year_before_0_years | Country  + calendar_year, data = clean_data)
+summary(fe_model_0_lag)
+```
+
+```{r}
+## Regression for 1 year lag for year of crisis
+fe_model_1_lag <- feols(pin_proportion_of_country ~ fsi_calendar_year_before_1_year | Country  + calendar_year, data = clean_data)
+summary(fe_model_1_lag)
+```
+
+```{r}
+## Regression for 2 year lag for year of crisis
+fe_model_2_lag <- feols(pin_proportion_of_country ~ fsi_calendar_year_before_2_year | Country  + calendar_year, data = clean_data)
+summary(fe_model_2_lag)
+```
+
+```{r}
+## Regression for 3 year lag for year of crisis
+fe_model_3_lag <- feols(pin_proportion_of_country ~ fsi_calendar_year_before_3_year | Country  + calendar_year, data = clean_data)
+summary(fe_model_3_lag)
+```
+
+```{r}
+## Regression for 5 year lag for year of crisis
+fe_model_5_lag <- feols(pin_proportion_of_country ~ fsi_calendar_year_before_5_year | Country  + calendar_year, data = clean_data)
+summary(fe_model_5_lag)
+```
+```{r}
+ggplot(clean_data, aes(x = years_since_crisis, y = total, group = Country)) +
+  geom_line(aes(color = Country)) + 
+  labs(x="Years since Crisis", y = "FSI Score")
+```
+```{r}
+## run panel regressions without fixed effect
+## Regression for 0 year lag 
+no_fe_model_0_lag <- plm(pin_proportion_of_country ~ fsi_calendar_year_before_0_years, data = clean_data, model = "pooling")
+summary(no_fe_model_0_lag)
+nobs(no_fe_model_0_lag)
+```
+
+```{r}
+## Regression for 1 year lag
+no_fe_model_1_lag <- plm(pin_proportion_of_country ~ fsi_calendar_year_before_1_year, data = clean_data, model = "pooling")
+summary(no_fe_model_1_lag)
+nobs(no_fe_model_1_lag)
+```
+```{r}
+## Regression for 2 year lag 
+no_fe_model_2_lag <- plm(pin_proportion_of_country ~ fsi_calendar_year_before_2_year, data = clean_data, model = "pooling")
+summary(no_fe_model_2_lag)
+nobs(no_fe_model_2_lag)
+```
+```{r}
+## Regression for 3 year lag 
+no_fe_model_3_lag <- plm(pin_proportion_of_country ~ fsi_calendar_year_before_3_year, data = clean_data, model = "pooling")
+summary(no_fe_model_3_lag)
+nobs(no_fe_model_3_lag)
+```
+```{r}
+## Regression for 5 year lag 
+no_fe_model_5_lag <- plm(pin_proportion_of_country ~ fsi_calendar_year_before_5_year, data = clean_data, model = "pooling")
+summary(no_fe_model_5_lag)
+nobs(no_fe_model_5_lag)
+```
+
+
+```{r}
+ggplot(clean_data, aes(x = calendar_year, y = total, group = Country)) +
+  geom_line(aes(color = Country)) + 
+  labs(x="Year", y = "FSI Score") + 
+  scale_x_continuous(breaks=seq(2011, 2024, by=1)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
