@@ -34,7 +34,9 @@ Lag Structures: Independent variables lagged by 0, 1, 2, 3, and 5 years to captu
 
 # Key Findings
 Overall FSI Score: Statistically significant predictor of humanitarian need in panel regressions across all lags. Weak performance in initial crisis and FE models.
+
 Sub-Indicators: Limited predictive power. Human Flight and Brain Drain, Refugees and IDPs, and Economy were the most consistent predictors, though results varied across lag structures and models.
+
 Conclusion: FSI is valuable for broad cross-country predictions but limited for targeted, indicator-level forecasting. Should be combined with other indices or qualitative assessments.
 
 # Acknowledgements
